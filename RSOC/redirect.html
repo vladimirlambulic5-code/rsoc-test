@@ -26,7 +26,18 @@
   <script>
     const p = new URLSearchParams(location.search);
     const kw = (p.get("kw") || "").trim();
-    const target = "https://www.google.com/search?q=" + encodeURIComponent(kw);
+
+    const PASSTHROUGH_KEYS = [
+      "src","subid","sub_id","clickid","fbclid","gclid",
+      "utm_source","utm_medium","utm_campaign","utm_term","utm_content"
+    ];
+
+    const url = new URL("https://www.google.com/search");
+    url.searchParams.set("q", kw);
+    for (const k of PASSTHROUGH_KEYS) {
+      if (p.has(k)) url.searchParams.set(k, p.get(k));
+    }
+    const target = url.toString();
 
     // prikaži KW i setuj button/fallback
     document.getElementById("kwText").textContent = kw ? `(${kw})` : "";
