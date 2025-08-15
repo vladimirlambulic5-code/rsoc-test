@@ -1,0 +1,114 @@
+# === RSOC watcher + ZIP backup (instant + ignore + rotate 20) ===
+
+$ErrorActionPreference = 'Stop'
+
+# Uvijek radi relativno na lokaciju skripte
+$ProjectRoot = $PSScriptRoot
+$BackupRoot  = Join-Path $ProjectRoot '_backups'
+$ProjectName = Split-Path -Leaf $ProjectRoot
+
+# Kreiraj _backups ako ne postoji
+if (-not (Test-Path $BackupRoot)) {
+    New-Item -ItemType Directory -Path $BackupRoot | Out-Null
+}
+
+# IGNORE: ne reaguj na _backups, logs i .zip fajlove
+$IgnoreRegex = [regex]'\\(_backups|logs)\\|\.zip$'
+
+# Minimalni anti-dup "debounce" da se izbjegne 5-6 događaja po jednom Save (2s)
+$script:LastEvent = @{ Path = ''; At = (Get-Date).AddYears(-1) }
+
+function Make-CheckpointZip {
+    try {
+        $ts      = Get-Date -Format 'yyyy-MM-dd_HH-mm-ss'
+        $zipName = '{0}_{1}.zip' -f $ProjectName, $ts
+        $zipPath = Join-Path $BackupRoot $zipName
+
+        # privremeni staging da izbacimo _backups, logs i *.zip
+        $tmp = Join-Path $env:TEMP ("rsoczip_{0}" -f ([guid]::NewGuid().ToString('N')))
+        New-Item -ItemType Directory -Path $tmp | Out-Null
+
+        # kopiraj sve osim _backups, logs i *.zip (tiho)
+        robocopy $ProjectRoot $tmp /MIR /XD "_backups" "logs" /XF *.zip > $null
+
+        if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+        Compress-Archive -Path (Join-Path $tmp '*') -DestinationPath $zipPath
+
+        Remove-Item $tmp -Recurse -Force
+
+        Write-Host "[BACKUP] Kreiran: $zipPath" -ForegroundColor Cyan
+    }
+    catch {
+        Write-Host "[ERROR] Backup nije uspio: $($_.Exception.Message)" -ForegroundColor Red
+    }
+}
+
+function Rotate-Backups {
+    # zadrži najnovijih 20
+    $keep = 20
+    $files = Get-ChildItem -Path $BackupRoot -Filter "$ProjectName*.zip" -ErrorAction SilentlyContinue |
+             Sort-Object LastWriteTime -Descending
+    if ($files.Count -gt $keep) {
+        $files[$keep..($files.Count-1)] | ForEach-Object {
+            try {
+                Remove-Item $_.FullName -Force
+                Write-Host "[ROTATE] Obrisan: $($_.Name)" -ForegroundColor DarkGray
+            } catch {}
+        }
+    }
+}
+
+# FileSystemWatcher
+$watcher = New-Object System.IO.FileSystemWatcher $ProjectRoot, '*'
+$watcher.IncludeSubdirectories = $true
+$watcher.NotifyFilter = [IO.NotifyFilters]::FileName `
+                      -bor [IO.NotifyFilters]::DirectoryName `
+                      -bor [IO.NotifyFilters]::LastWrite `
+                      -bor [IO.NotifyFilters]::Size
+$watcher.EnableRaisingEvents = $true
+
+$action = {
+    $full = $EventArgs.FullPath
+    $type = $EventArgs.ChangeType
+
+    # preskoči _backups, logs i .zip
+    if ($full -match $using:IgnoreRegex) { return }
+
+    # sitni debounce (2s) protiv duplih događaja pri jednom Save
+    if ($full -eq $script:LastEvent.Path -and ((Get-Date) - $script:LastEvent.At).TotalSeconds -lt 2) {
+        return
+    }
+    $script:LastEvent.Path = $full
+    $script:LastEvent.At   = Get-Date
+
+    Write-Host ("[CHANGE] {0} - {1}" -f $type, $full) -ForegroundColor Yellow
+
+    # instant backup na svaku validnu promjenu
+    Make-CheckpointZip
+    Rotate-Backups
+}
+
+# registruj evente
+$reg1 = Register-ObjectEvent -InputObject $watcher -EventName Changed -Action $action
+$reg2 = Register-ObjectEvent -InputObject $watcher -EventName Created -Action $action
+$reg3 = Register-ObjectEvent -InputObject $watcher -EventName Deleted -Action $action
+$reg4 = Register-ObjectEvent -InputObject $watcher -EventName Renamed -Action $action
+
+Write-Host ("Watching: {0}" -f $ProjectRoot) -ForegroundColor Cyan
+Write-Host "Watcher pokrenut. Sve promjene će biti prijavljene i backup-ovane." -ForegroundColor Green
+Write-Host "Zaustavi sa CTRL+C.`n"
+
+# >>> DODATO: inicijalni backup odmah po startu <<<
+Make-CheckpointZip
+Rotate-Backups
+$script:LastEvent.At = Get-Date  # da ne okidamo opet istog sekunda
+
+try {
+    while ($true) { Start-Sleep -Seconds 1 }
+}
+finally {
+    $reg1,$reg2,$reg3,$reg4 | ForEach-Object {
+        if ($_){ Unregister-Event -SourceIdentifier $_.Name -ErrorAction SilentlyContinue }
+    }
+    $watcher.EnableRaisingEvents = $false
+}

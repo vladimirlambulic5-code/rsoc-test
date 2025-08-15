@@ -1,0 +1,50 @@
+<?php
+// --- redirect.php + CLICK LOG ---
+// Loguje: time, ip, ua, kw, ts  -> logs/clicks.csv
+// Headeri: 302 + noindex + no-cache
+
+$kw = isset($_GET['kw']) ? trim($_GET['kw']) : '';
+$ts = isset($_GET['ts']) ? preg_replace('/\D+/', '', $_GET['ts']) : ''; // samo cifre
+
+if ($kw === '') {
+  header('X-Robots-Tag: noindex, nofollow', true);
+  header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0', true);
+  http_response_code(400);
+  echo 'No keyword provided.';
+  exit;
+}
+
+/* -------- CLICK LOG (CSV) -------- */
+$logDir = __DIR__ . '/logs';
+if (!is_dir($logDir)) { @mkdir($logDir, 0777, true); }
+
+$ip = '-';
+if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+  $parts = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+  $ip = trim($parts[0]); // uzmi prvi IP
+} elseif (!empty($_SERVER['REMOTE_ADDR'])) {
+  $ip = $_SERVER['REMOTE_ADDR'];
+}
+
+$ua   = substr($_SERVER['HTTP_USER_AGENT'] ?? '-', 0, 200);
+$time = date('c'); // ISO 8601
+$logFile = $logDir . '/clicks.csv';
+
+if (!file_exists($logFile)) {
+  @file_put_contents($logFile, "\"time\",\"ip\",\"ua\",\"kw\",\"ts\"\r\n", FILE_APPEND | LOCK_EX);
+}
+
+$csv = function ($v) { return '"' . str_replace('"','""',$v) . '"'; };
+$row = $csv($time) . ',' . $csv($ip) . ',' . $csv($ua) . ',' . $csv($kw) . ',' . $csv($ts);
+@file_put_contents($logFile, $row . "\r\n", FILE_APPEND | LOCK_EX);
+/* -------- /CLICK LOG -------- */
+
+/* Target redirect */
+$target = 'https://www.google.com/search?q=' . urlencode($kw);
+if ($ts !== '') { $target .= '&ts=' . $ts; }
+
+header('X-Robots-Tag: noindex, nofollow', true);
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0', true);
+header('Pragma: no-cache', true);
+header('Location: ' . $target, true, 302);
+exit;

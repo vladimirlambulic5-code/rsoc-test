@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RSOC Article</title>
+  <link rel="stylesheet" href="assets/style.css" />
+
+  <!-- SWITCH: PHP (lokalni XAMPP) vs static (npr. neocities) -->
+  <script>
+    // Lokalno na XAMPP-u forsiramo PHP mod
+    window.USE_PHP = true;
+    // Ako jednog dana deployaš na neocities/github.io → auto static
+    (function () {
+      const h = location.host.toLowerCase();
+      if (h.includes('neocities') || h.includes('github.io')) {
+        window.USE_PHP = false;
+      }
+    })();
+  </script>
+
+  <!-- Guard: ako se fajl otvara kao file://, isključi PHP mod -->
+  <script>
+    if (location.protocol === 'file:') {
+      window.USE_PHP = false;
+    }
+  </script>
+
+  <!-- RSOC: dynamic SEO meta -->
+  <meta id="meta-desc" name="description" content="">
+  <script>
+    function toTitle(s){ return s.replace(/\w\S*/g, t => t[0].toUpperCase() + t.slice(1).toLowerCase()); }
+    document.addEventListener('DOMContentLoaded', () => {
+      const qs = new URLSearchParams(location.search);
+      const base = (qs.get("kw") || "Braces").trim().replace(/\+/g, " ");
+      const clean = base.replace(/[^\p{L}\p{N}\s\-\(\)]+/gu, "").slice(0, 80);
+
+      const intent = clean.toLowerCase();
+      let desc = `Neutral, educational overview about ${clean}. Learn options, considerations, costs, and how to choose a licensed provider in your area.`;
+
+      if (/\b(cost|price|how much)\b/i.test(intent)) {
+        desc = `Understand the typical cost factors for ${clean}, what can influence pricing, and questions to ask a licensed provider.`;
+      } else if (/\b(near me|local)\b/i.test(intent)) {
+        desc = `How to find licensed ${clean} providers near you, what to verify, and how to compare options safely.`;
+      } else if (/\b(options|types|for adults|for teens)\b/i.test(intent)) {
+        desc = `Common options for ${clean}, benefits and limitations, and how to discuss suitability with a professional.`;
+      }
+
+      document.title = `${toTitle(clean)} — Guide`;
+      const md = document.getElementById('meta-desc');
+      if (md) md.setAttribute('content', desc);
+    });
+  </script>
+</head>
+<body>
+
+  <!-- Ping za init.php -> sada uslovno (samo kad je PHP mod) -->
+  <script>
+    if (window.USE_PHP) {
+      const img = document.createElement('img');
+      img.src = 'init.php';
+      img.alt = '';
+      img.style.display = 'none';
+      document.head.appendChild(img);
+    }
+  </script>
+
+  <header class="hero">
+    <img src="assets/header-dark.jpg" alt="Header" />
+  </header>
+
+  <main class="container">
+    <div class="meta">
+      <span class="dot"></span>
+      <span class="pub">Published on <span id="pubdate"></span></span>
+      <span class="read">• 5 min read</span>
+    </div>
+
+    <!-- RSOC Compliance: disclaimer + E-E-A-T (bez inline stila) -->
+    <section class="note">
+      <strong>Important:</strong> This page is for informational purposes only and is not medical, dental, legal, or financial advice.
+      Always consult a licensed professional for guidance tailored to your situation.
+      <div class="note-sub">Edited by RSOC Editorial Team • Reviewed for clarity and neutrality • Last updated <span id="lastUpdated"></span></div>
+    </section>
+    <script>
+      document.getElementById('lastUpdated').textContent =
+        new Date().toLocaleDateString(undefined, {year:'numeric',month:'short',day:'numeric'});
+    </script>
+
+    <h1 class="title" id="articleTitle">Everything you need to know about <span id="topicSpan"></span></h1>
+
+    <p class="intro" id="intro">
+      Did you know that <span id="topicSpan2"></span> can correct issues beyond just aesthetics?
+      Understanding the differences and cost context can help you make informed choices.
+    </p>
+
+    <h3 class="subtle">Discover related topics</h3>
+    <div id="kwList" class="kw-list wide"></div>
+
+    <section class="content">
+      <h2>What is <span id="topicSpan3"></span>?</h2>
+      <p>
+        <span id="topicSpan4"></span> are used to improve function and appearance. Below you can explore
+        related searches to continue your research.
+      </p>
+    </section>
+
+    <!-- RSOC auto-sekcije (neutralne, po namjeri KW) -->
+    <section id="rsoc-sections" class="content"></section>
+
+    <h3 class="subtle">Discover related topics</h3>
+    <div id="kwList2" class="kw-list wide"></div>
+  </main>
+
+  <script>
+    const qs = new URLSearchParams(location.search);
+    const base = (qs.get("kw") || "Braces").trim();
+    const topic = base.replace(/\+/g, " ");
+
+    /* STABILAN DATUM PO KORISNIKU (localStorage) */
+    const key = 'rsoc_pubdate';
+    let stored = localStorage.getItem(key);
+    if (!stored) {
+      stored = new Date().toISOString();
+      localStorage.setItem(key, stored);
+    }
+    const d = new Date(stored);
+    const fmt = d.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    document.getElementById("pubdate").textContent = fmt;
+
+    document.getElementById("topicSpan").textContent = topic.toLowerCase();
+    document.getElementById("topicSpan2").textContent = topic.toLowerCase();
+    document.getElementById("topicSpan3").textContent = topic.toLowerCase();
+    document.getElementById("topicSpan4").textContent = topic;
+
+    const suggestionsTop = [
+      `${topic} Price`,
+      `Affordable ${topic}`,
+      `${topic} Near Me`,
+      `${topic} for Adults`,
+      `${topic} for Teens`,
+      `${topic} Options`
+    ];
+
+    const suggestionsBottom = [
+      `How Much are ${topic}`,
+      `${topic} Cost Guide`,
+      `${topic} Insurance`,
+      `Invisible ${topic}`
+    ];
+
+    /* ==== PASSTHROUGH BLOK ==== */
+    const PASSTHROUGH_KEYS = [
+      'src','subid','sub_id','clickid','fbclid','gclid',
+      'utm_source','utm_medium','utm_campaign','utm_term','utm_content'
+    ];
+    const urlParams = new URLSearchParams(location.search);
+    const passthrough = new URLSearchParams();
+    for (const k of PASSTHROUGH_KEYS) {
+      if (urlParams.has(k)) passthrough.set(k, urlParams.get(k));
+    }
+
+    function render(list, targetId) {
+      const wrap = document.getElementById(targetId);
+      wrap.innerHTML = "";
+      list.forEach(text => {
+        const a = document.createElement("a");
+        a.className = "kw-btn kw-btn--wide";
+        a.innerHTML = `<span class="kw-label">${text}</span><span class="kw-chevron">›</span>`;
+
+        // Dinamički izaberi redirect fajl (PHP ili HTML) + ts parametar
+        const ts = Date.now();
+        const path = (window.USE_PHP ? 'redirect.php' : 'redirect.html');
+
+        // === IZMJENA: relativni link bez new URL (ostaje u /RSOCtest3/) ===
+        const q = new URLSearchParams({ kw: text, ts });
+        for (const [k, v] of passthrough.entries()) q.set(k, v);
+        a.href = `${path}?${q.toString()}`;
+
+        wrap.appendChild(a);
+      });
+    }
+
+    render(suggestionsTop, "kwList");
+    render(suggestionsBottom, "kwList2");
+
+    /* ==== RSOC auto-sekcije render ==== */
+    (function(){
+      const wrap = document.getElementById('rsoc-sections');
+      const intent = topic.toLowerCase();
+      const blocks = [];
+
+      blocks.push({
+        h: `Overview of ${topic}`,
+        p: [
+          `${topic} can be discussed with a licensed professional to understand suitability, benefits, limitations, and potential risks.`,
+          `The information below is general and may not reflect your individual needs.`
+        ]
+      });
+
+      if (/\b(cost|price|how much)\b/.test(intent)) {
+        blocks.push({
+          h: `What affects the cost of ${topic}?`,
+          p: [
+            `Pricing may vary by location, provider experience, case complexity, materials, and follow-up care.`,
+            `Ask for an itemized estimate that includes consultations, procedures, and aftercare.`
+          ]
+        });
+      }
+
+      if (/\b(near me|local)\b/.test(intent)) {
+        blocks.push({
+          h: `How to find a licensed ${topic} provider near you`,
+          p: [
+            `Search official registries and verify the license status.`,
+            `Compare multiple consultations and ask about approach, safety protocols, outcomes, and total cost.`
+          ]
+        });
+      }
+
+      if (/\b(options|types|for adults|for teens|invisible|clear)\b/.test(intent)) {
+        blocks.push({
+          h: `Common options for ${topic}`,
+          p: [
+            `Different options may be appropriate depending on goals and clinical evaluation.`,
+            `Discuss suitability, maintenance, expected timeframes, and follow-up visits with a professional.`
+          ]
+        });
+      }
+
+      blocks.push({
+        h: `Questions to ask a professional`,
+        p: [
+          `What outcomes are realistic in my case? What are the risks and aftercare?`,
+          `What are total costs, payment options, and policies for follow-up or adjustments?`
+        ]
+      });
+
+      wrap.innerHTML = blocks.map(b => `
+        <h2>${b.h}</h2>
+        ${b.p.map(x=>`<p>${x}</p>`).join('')}
+      `).join('');
+    })();
+  </script>
+
+  <!-- RSOC: JSON-LD Article + FAQ (safe, generic) -->
+  <script type="application/ld+json" id="rsoc-jsonld"></script>
+  <script>
+    (function(){
+      const qs = new URLSearchParams(location.search);
+      const base = (qs.get("kw") || "Braces").trim().replace(/\+/g, " ");
+      const clean = base.replace(/[^\p{L}\p{N}\s\-\(\)]+/gu, "").slice(0, 80);
+      const nowISO = new Date().toISOString();
+
+      const article = {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": `${clean} — Guide`,
+        "description": document.querySelector('meta[name="description"]')?.content || "",
+        "author": { "@type": "Organization", "name": "RSOC Editorial Team" },
+        "isAccessibleForFree": true,
+        "datePublished": localStorage.getItem('rsoc_pubdate') || nowISO,
+        "dateModified": nowISO,
+        "about": clean,
+        "mainEntityOfPage": location.href
+      };
+
+      const faq = {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": `What should I know before choosing ${clean}?`,
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Verify the provider’s license, compare multiple consultations, ask about risks, expected outcomes, total costs and any follow-up care. Consider your personal needs and medical history with a professional."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": `How much do ${clean} typically cost?`,
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Costs vary by location, provider, complexity, and materials. Request a written estimate that includes all fees and follow-up visits. Insurance coverage and payment plans differ by provider."
+            }
+          }
+        ]
+      };
+
+      document.getElementById('rsoc-jsonld').textContent = JSON.stringify([article, faq]);
+    })();
+  </script>
+
+  <!-- RSOC safe-link patch: force rel/target na svim izlaznim linkovima -->
+  <script>
+  document.addEventListener('DOMContentLoaded', function () {
+    // 1) Odmah postavi na postojeće linkove koji vode na redirect
+    const setAttrs = (a) => {
+      try {
+        if (!a) return;
+        const href = a.getAttribute('href') || '';
+        if (href.includes('redirect.php') || href.includes('redirect.html')) {
+          a.setAttribute('rel', 'nofollow sponsored noopener noreferrer');
+          a.setAttribute('target', '_blank');
+        }
+      } catch(e) {}
+    };
+
+    document.querySelectorAll('a').forEach(setAttrs);
+
+    // 2) Posmatraj buduće promjene (ako JS dinamički dodaje linkove)
+    const obs = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        m.addedNodes.forEach((n) => {
+          if (n.nodeType !== 1) return; // Element nodes only
+          if (n.matches && n.matches('a')) setAttrs(n);
+          n.querySelectorAll && n.querySelectorAll('a').forEach(setAttrs);
+        });
+      }
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+  });
+  </script>
+
+</body>
+</html>
+<!-- ping-ok -->

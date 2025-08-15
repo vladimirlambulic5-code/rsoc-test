@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RSOC Article</title>
+  <link rel="stylesheet" href="assets/style.css" />
+
+  <!-- SWITCH: PHP (lokalni XAMPP) vs static (npr. neocities) -->
+  <script>
+    // Lokalno na XAMPP-u forsiramo PHP mod
+    window.USE_PHP = true;
+
+    // Ako jednog dana deployaš na neocities/github.io → auto static
+    (function () {
+      const h = location.host.toLowerCase();
+      if (h.includes('neocities') || h.includes('github.io')) {
+        window.USE_PHP = false;
+      }
+    })();
+  </script>
+
+  <!-- Guard: ako se fajl otvara kao file://, isključi PHP mod -->
+  <script>
+    if (location.protocol === 'file:') {
+      window.USE_PHP = false;
+    }
+  </script>
+</head>
+<body>
+
+  <!-- Ping za init.php -> sada uslovno (samo kad je PHP mod) -->
+  <script>
+    if (window.USE_PHP) {
+      const img = document.createElement('img');
+      img.src = 'init.php';
+      img.alt = '';
+      img.style.display = 'none';
+      document.head.appendChild(img);
+    }
+  </script>
+
+  <header class="hero">
+    <img src="assets/header-dark.jpg" alt="Header" />
+  </header>
+
+  <main class="container">
+    <div class="meta">
+      <span class="dot"></span>
+      <span class="pub">Published on <span id="pubdate"></span></span>
+      <span class="read">• 5 min read</span>
+    </div>
+
+    <h1 class="title" id="articleTitle">Everything you need to know about <span id="topicSpan"></span></h1>
+
+    <p class="intro" id="intro">
+      Did you know that <span id="topicSpan2"></span> can correct issues beyond just aesthetics?
+      Understanding the differences and cost context can help you make informed choices.
+    </p>
+
+    <h3 class="subtle">Discover related topics</h3>
+    <div id="kwList" class="kw-list"></div>
+
+    <section class="content">
+      <h2>What is <span id="topicSpan3"></span>?</h2>
+      <p>
+        <span id="topicSpan4"></span> are used to improve function and appearance. Below you can explore
+        related searches to continue your research.
+      </p>
+    </section>
+
+    <h3 class="subtle">Discover related topics</h3>
+    <div id="kwList2" class="kw-list"></div>
+  </main>
+
+  <script>
+    const qs = new URLSearchParams(location.search);
+    const base = (qs.get("kw") || "Braces").trim();
+    const topic = base.replace(/\+/g, " ");
+
+    /* STABILAN DATUM PO KORISNIKU (localStorage) */
+    const key = 'rsoc_pubdate';
+    let stored = localStorage.getItem(key);
+    if (!stored) {
+      stored = new Date().toISOString();
+      localStorage.setItem(key, stored);
+    }
+    const d = new Date(stored);
+    const fmt = d.toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    document.getElementById("pubdate").textContent = fmt;
+
+    document.getElementById("topicSpan").textContent = topic.toLowerCase();
+    document.getElementById("topicSpan2").textContent = topic.toLowerCase();
+    document.getElementById("topicSpan3").textContent = topic.toLowerCase();
+    document.getElementById("topicSpan4").textContent = topic;
+
+    const suggestionsTop = [
+      `${topic} Price`,
+      `Affordable ${topic}`,
+      `${topic} Near Me`,
+      `${topic} for Adults`,
+      `${topic} for Teens`,
+      `${topic} Options`
+    ];
+
+    const suggestionsBottom = [
+      `How Much are ${topic}`,
+      `${topic} Cost Guide`,
+      `${topic} Insurance`,
+      `Invisible ${topic}`
+    ];
+
+    function render(list, targetId) {
+      const wrap = document.getElementById(targetId);
+      wrap.innerHTML = "";
+      list.forEach(text => {
+        const a = document.createElement("a");
+        a.className = "kw-btn";
+        a.textContent = text;
+
+        // Dinamički izaberi redirect fajl (PHP ili HTML) + ts parametar
+        const ts = Date.now();
+        const path = (window.USE_PHP ? 'redirect.php' : 'redirect.html');
+        a.href = `${path}?kw=${encodeURIComponent(text)}&ts=${ts}`;
+
+        wrap.appendChild(a);
+      });
+    }
+
+    render(suggestionsTop, "kwList");
+    render(suggestionsBottom, "kwList2");
+  </script>
+</body>
+</html>
+<!-- ping-ok -->
+
